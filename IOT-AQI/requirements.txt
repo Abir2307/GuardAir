@@ -1,0 +1,9 @@
+streamlit
+tensorflow
+numpy
+pandas
+joblib
+plotly
+scikit-learn
+openpyxl
+reportlab
