@@ -7,4 +7,3 @@ plotly
 scikit-learn
 openpyxl
 reportlab
-python-3.11.8
