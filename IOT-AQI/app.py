@@ -1,7 +1,11 @@
 import streamlit as st
 import os
+import sys
+
+# Configure environment logs before loading major frameworks
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+
 import tensorflow as tf
 import warnings
 warnings.filterwarnings("ignore", message=".*Skipping variable loading for optimizer.*")
@@ -13,22 +17,30 @@ import time
 import hashlib
 from io import BytesIO
 
-EXCEL_PATH = "Excel_IOT BASED REAL TIME AIR QUALITY MONITORING SYSTEM.xlsx"
+# Establish absolute basePath configuration for server-side subdirectories
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+def get_relative_path(filename):
+    return os.path.join(BASE_DIR, filename)
+
+EXCEL_PATH = get_relative_path("Excel_IOT BASED REAL TIME AIR QUALITY MONITORING SYSTEM.xlsx")
 EXCEL_FEATURE_COLUMNS = ["Temperature (°C)", "Humidity (%)", "PM2.5", "MQ135 (Gas)", "MQ7 (CO)"]
 EXCEL_TIMESTAMP_COLUMN = "Timestamp"
 FEATURE_NAMES = ["temp", "humidity", "pm25", "mq135", "mq7"]
 CONTRIB_BACKGROUND_SAMPLES = 10
 
-# Load models
-scaler = joblib.load("scaler.pkl")
-if_model = joblib.load("isolation_forest_model.pkl")
-ae_model = tf.keras.models.load_model("autoencoder.keras")
+# Load deserialized pipelines and binary frameworks using dynamic paths
+scaler = joblib.load(get_relative_path("scaler.pkl"))
+if_model = joblib.load(get_relative_path("isolation_forest_model.pkl"))
+ae_model = tf.keras.models.load_model(get_relative_path("autoencoder.keras"))
 
-# Load distributions
-ae_dist = np.load("ae_error_dist.npy") if os.path.exists("ae_error_dist.npy") else None
-if_dist = np.load("if_score_dist.npy") if os.path.exists("if_score_dist.npy") else None
+# Load runtime distribution vectors
+ae_dist_path = get_relative_path("ae_error_dist.npy")
+if_dist_path = get_relative_path("if_score_dist.npy")
+ae_dist = np.load(ae_dist_path) if os.path.exists(ae_dist_path) else None
+if_dist = np.load(if_dist_path) if os.path.exists(if_dist_path) else None
 
-# Session State Initialization
+# Session State Architecture initialization
 if "prev_ae" not in st.session_state:
     st.session_state["prev_ae"] = None
 
@@ -94,7 +106,7 @@ def _sanitize_health_thresholds(raw_thresholds):
 
 
 def _load_health_thresholds():
-    threshold_file_candidates = ["health_threshold.npy", "health_thresholds.npy"]
+    threshold_file_candidates = [get_relative_path("health_threshold.npy"), get_relative_path("health_thresholds.npy")]
     for threshold_file in threshold_file_candidates:
         if os.path.exists(threshold_file):
             try:
@@ -396,8 +408,11 @@ def health_stats(window_size):
     return avg_health, min_health, max_health, moving_avg
 
 
-if_thresholds = np.load("if_thresholds.npy", allow_pickle=True).item() if os.path.exists("if_thresholds.npy") else {"critical": 0.5, "suspicious": 0.3, "slightly_unusual": 0.1}
-ae_thresholds = np.load("ae_thresholds.npy", allow_pickle=True).item() if os.path.exists("ae_thresholds.npy") else {"critical": 0.05, "suspicious": 0.02, "slight": 0.01}
+if_thresh_path = get_relative_path("if_thresholds.npy")
+ae_thresh_path = get_relative_path("ae_thresholds.npy")
+
+if_thresholds = np.load(if_thresh_path, allow_pickle=True).item() if os.path.exists(if_thresh_path) else {"critical": 0.5, "suspicious": 0.3, "slightly_unusual": 0.1}
+ae_thresholds = np.load(ae_thresh_path, allow_pickle=True).item() if os.path.exists(ae_thresh_path) else {"critical": 0.05, "suspicious": 0.02, "slight": 0.01}
 
 
 def classify_if(score):
@@ -875,13 +890,13 @@ with placeholder.container():
         st.caption(excel_error)
 
     if st.button("Generate PDF Report"):
-        from reportlab.lib import colors
+        from reportlab.lib import colors as r_colors
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
 
         def generate_pdf(dataframe):
-            file = "alerts.pdf"
-            doc = SimpleDocTemplate(file)
+            pdf_file = "alerts.pdf"
+            doc = SimpleDocTemplate(pdf_file)
             styles = getSampleStyleSheet()
             title_style = styles["Title"]
             title_style.fontName = "Helvetica-Bold"
@@ -896,10 +911,10 @@ with placeholder.container():
             )
 
             severity_colors = {
-                "NORMAL": colors.green,
-                "WARNING": colors.orange,
-                "CRITICAL": colors.red,
-                "HEALTHY": colors.green,
+                "NORMAL": r_colors.green,
+                "WARNING": r_colors.orange,
+                "CRITICAL": r_colors.red,
+                "HEALTHY": r_colors.green,
             }
 
             total_cols = max(1, len(dataframe.columns))
@@ -915,7 +930,7 @@ with placeholder.container():
                 for column in dataframe.columns:
                     value = row[column]
                     if column == "System Status":
-                        color = severity_colors.get(str(value).upper(), colors.black)
+                        color = severity_colors.get(str(value).upper(), r_colors.black)
                         status_style_p = ParagraphStyle(
                             "StatusCell",
                             parent=normal_style,
@@ -928,35 +943,35 @@ with placeholder.container():
                 table_data.append(row_cells)
 
             table = Table(
-            table_data,
-            repeatRows=3,
-            colWidths=[95, 65, 55, 55, 60, 60]
-        )
+                table_data,
+                repeatRows=3,
+                colWidths=[95, 65, 55, 55, 60, 60]
+            )
             table.setStyle(TableStyle([
                 ("SPAN", (0, 0), (-1, 0)),
-                ("GRID", (0, 2), (-1, -1), 0.75, colors.black),
-                ("BOX", (0, 2), (-1, -1), 1.0, colors.black),
+                ("GRID", (0, 2), (-1, -1), 0.75, r_colors.black),
+                ("BOX", (0, 2), (-1, -1), 1.0, r_colors.black),
                 ("ALIGN", (0, 0), (-1, 0), "CENTER"),
-                ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#D9E2F3")),
+                ("BACKGROUND", (0, 2), (-1, 2), r_colors.HexColor("#D9E2F3")),
                 ("ALIGN", (0, 2), (-1, -1), "CENTER"),
                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
                 ("LEADING", (0, 0), (-1, -1), 11),
                 ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
                 ("TOPPADDING", (0, 0), (-1, -1), 6),
-                ("BACKGROUND", (0, 2), (-1, 2), colors.HexColor("#BFD7EA")),
-                ("BACKGROUND", (0, 3), (-1, -1), colors.white),
+                ("BACKGROUND", (0, 2), (-1, 2), r_colors.HexColor("#BFD7EA")),
+                ("BACKGROUND", (0, 3), (-1, -1), r_colors.white),
             ]))
 
-            def _draw_footer(canvas, doc):
+            def _draw_footer(canvas, pdf_doc):
                 footer_text = "Legend — Anomaly: 0..1 (higher = more anomalous). Health % = (1 - Anomaly) × 100 (higher = healthier)."
                 canvas.saveState()
                 canvas.setFont("Helvetica", 8)
-                width, height = doc.pagesize
+                width, height = pdf_doc.pagesize
                 canvas.drawCentredString(width / 2.0, 20, footer_text)
                 canvas.restoreState()
 
             doc.build([table], onFirstPage=_draw_footer, onLaterPages=_draw_footer)
-            return file
+            return pdf_file
         
         file = generate_pdf(csv_alert_df)
         with open(file, "rb") as f:
